@@ -14,7 +14,7 @@
         android:theme="@style/AppTheme" >
         <service
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:name="org.jfet.batsM3u.M3uPlay" >
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
