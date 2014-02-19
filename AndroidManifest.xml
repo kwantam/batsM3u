@@ -4,11 +4,20 @@
     android:versionName="1.0" >
 
     <uses-sdk
-        android:minSdkVersion="16"
+        android:minSdkVersion="8"
         android:targetSdkVersion="19" />
+    <!-- HTTPS probably doesn't work before 3.1, which is API level 12 -->
+    
+    <!-- streaming stuff -->
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- external and internal storage for actually reading the M3u files -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_INTERNAL_STORAGE" />
+    
+    <!-- wake_lock for media player and wifi, access for checking whether we need wifi lock -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
@@ -21,7 +30,8 @@
             android:theme="@android:style/Theme.NoDisplay" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- <category android:name="android.intent.category.LAUNCHER" /> -->
+                <!-- If we get rid of LAUNCHER, the icon doesn't show up in launcher, which is what we want -->
             </intent-filter>
 
             <intent-filter>
@@ -31,7 +41,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <!-- no scheme is interpreted as both file and content -->
-                <data android:mimeType="audio/*" />
+                <data android:mimeType="audio/x-mpegurl" />
+                <data android:mimeType="audio/mpeg-url" />
+                <data android:mimeType="audio/mpegurl" />
+                <data android:mimeType="application/x-mpegurl" />
+                <data android:mimeType="application/mpeg-url" />
+                <data android:mimeType="application/mpegurl" />
+                <data android:mimeType="application/x-winamp-playlist" />
+                <data android:mimeType="audio/scpls" />
+                <data android:mimeType="audio/x-scpls" />
             </intent-filter>
             
             <!--
@@ -62,6 +80,16 @@
             android:exported="false"
             android:name="org.jfet.batsM3u.M3uPlay" >
         </service>
+        
+        <receiver
+            android:name="org.jfet.batsM3u.M3uNoisyReceiver" >
+            <intent-filter>
+                <action android:name="android.media.AUDIO_BECOMING_NOISY" />
+            </intent-filter> 
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
 
     </application>
     
