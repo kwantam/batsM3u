@@ -3,11 +3,11 @@ package org.jfet.batsM3u;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URLDecoder;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ComponentName;
@@ -19,17 +19,20 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.support.v4.app.NotificationCompat;
 import android.media.MediaPlayer;
 import android.media.AudioManager;
 //import android.util.Log;
 
 public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener, MediaPlayer.OnCompletionListener, AudioManager.OnAudioFocusChangeListener {
-    private MediaPlayer mPlayer = null;
     private List<String> m3uTracks = null;
     private boolean isPaused = false;
     private boolean lockTrack = false;
     private int trackNum = 0;
 
+    private MediaPlayer mPlayer = null;
+    private WifiLock wlock = null;
+    
     static final String START = "org.jfet.batsM3u.START";
     static final String NEXT = "org.jfet.batsM3u.NEXT";
     static final String PREV = "org.jfet.batsM3u.PREV";
@@ -50,9 +53,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     private PendingIntent pPlayIntent = null;
     private PendingIntent pPauseIntent = null;
     private PendingIntent pStopIntent = null;
-    
-    private WifiLock wlock = null;
-    
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -84,12 +85,11 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         return null;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         boolean justResume = false;
-        final Notification.Builder nb = new Notification.Builder(getApplicationContext());
+        final NotificationCompat.Builder nb = new NotificationCompat.Builder(getApplicationContext());
         nb.setContentIntent(pStopIntent)
         .setSmallIcon(R.drawable.ic_stat_notify)
         .setWhen(System.currentTimeMillis())
@@ -128,57 +128,66 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
                 try {
                     //doLog("getting M3u");
                     m3uTracks = getM3u(intent.getData());
-                    trackNum = 0;
                 } catch (IOException ex) {
                     //doLog("failed to get M3u");
                     return stopPlayer();
                 }
                 //doLog("got M3u");
-            } else if (m3uTracks != null) {
+                // we're kinda restarting from scratch here, so we need to reset some other vars too
+                trackNum = 0;
+                isPaused = false;
+                lockTrack = false;
+            } else if (null != m3uTracks) {
                 if (intent.getBooleanExtra(M3uPlay.STOP, false)) {
                     //doLog("asked to stop");
                     return stopPlayer();
                 } else if (! lockTrack) {   // only allow NEXT, PREV, PAUSE, and PLAY if we're not asynchronously prepping a track
                     if (intent.getBooleanExtra(M3uPlay.NEXT, false)) {
                         //doLog("NEXT");
-                        if (++trackNum == m3uTracks.size())
-                            trackNum = m3uTracks.size() - 1;
+                    	trackNum += 1;
+                    	if (! checkTrackBounds())
+                    		return stopPlayer();
                     } else if (intent.getBooleanExtra(M3uPlay.PREV, false)) {
                         //doLog("PREV");
-                        if (--trackNum < 0)
-                            trackNum = 0;
+                    	trackNum -= 1;
+                    	if (! checkTrackBounds())
+                    		return stopPlayer();
                     } else if (intent.getBooleanExtra(M3uPlay.PAUSE, false)) {
-                        //doLog("PAUSE");
-                        if (isPaused) { // pause can also be used to toggle the pause state (for convenience of media keys
-                            isPaused = false;
-                            justResume = true;
-                        } else {
-                            isPaused = true;
-                        }
+                    	isPaused = true;
                     } else if (intent.getBooleanExtra(M3uPlay.PLAY, false)) {
                         //doLog("PLAY");
-                        isPaused = false;
-                        justResume = true;
+                    	if (isPaused) { // play can also be used to toggle the pause state (for convenience of media keys
+                    		isPaused = false;
+                    		justResume = true;
+                    	} else {
+                    		isPaused = true;
+                    	}
                     } else {
                         //doLog("track unlocked, but unknown intent");
-                        return START_STICKY;    // don't know wtf this is; do nothing
+                        return START_NOT_STICKY;    // don't know wtf this is; do nothing
                     }
                 } else {
                     //doLog("doing nothing, track locked");
-                    return START_STICKY;    // if lockTrack, do nothing
+                    return START_NOT_STICKY;    // if lockTrack, do nothing
                 }
             } else {
                 //doLog("m3uTracks null, unknown intent");
                 return START_NOT_STICKY;
             }
+        } else {
+        	// if we get a null intent, do nothing and also indicate
+        	// that we don't need any more such nulls in the future.
+        	// (this happens presumably only when we're not playing,
+        	// so we don't need to remain sticky.)
+        	return START_NOT_STICKY;
         }
 
         final String url = m3uTracks.get(trackNum);
         final String fileName;
         if (url.indexOf('/') != -1)
-            fileName = URLDecoder.decode(url.substring(url.lastIndexOf('/')+1));
+            fileName = Uri.decode(url.substring(url.lastIndexOf('/')+1));
         else
-            fileName = URLDecoder.decode(url);
+            fileName = Uri.decode(url);
 
         if (isPaused) {
             nb.setTicker("Paused")
@@ -217,7 +226,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
             }
         }
 
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
     
 /*
@@ -245,10 +254,37 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         lockTrack = false;
     }
 
+    // returns false if there are no more tracks to play and we should give up
+    private boolean checkTrackBounds() {
+    	if (m3uTracks.size() == 0)
+    		return false;
+    	else if (trackNum < 0)
+    		trackNum = 0;
+    	else if (trackNum >= m3uTracks.size())
+    		trackNum = m3uTracks.size() - 1;
+    	
+    	return true;
+    }
+
     @Override
     public boolean onError(MediaPlayer p, int what, int extra) {
         //doLog("media player error: " + what + " " + extra);
-        stopPlayer();
+
+    	if ( (1 == what) && (-1004 == extra) ) {
+    		mPlayer.reset();
+    		lockTrack = false;
+    		isPaused = false;
+    		// probably just a 404; remove the offending file
+    		//doLog("not found: " + m3uTracks.get(trackNum));
+    		m3uTracks.remove(trackNum--);
+    		
+    		// we decremented above, so sending NEXT
+    		// will cause the player to do the right thing
+    		startService(nextIntent);
+    	} else {
+    		stopPlayer();
+    	}
+
         return true;
     }
 
@@ -267,7 +303,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         switch (focusChange) {
         case AudioManager.AUDIOFOCUS_GAIN:
             // returning from LOSS_TRANSIENT or LOSS_TRANSIENT_CAN_DUCK
-            if (mPlayer != null) {
+            if (null != mPlayer) {
                 mPlayer.setVolume(1.0f, 1.0f);
                 if (isPaused)
                     // unpause, if necessary
@@ -287,7 +323,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
             
         case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
             // don't have to pause, just lower volume a bit
-            if (mPlayer != null && mPlayer.isPlaying())
+            if ( (null != mPlayer) && (mPlayer.isPlaying()) )
                 mPlayer.setVolume(0.3f,0.3f);
             break;
         }
@@ -297,6 +333,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         //doLog("stopping media player");
         mPlayer.release();
         mPlayer = null;
+        m3uTracks = null;
         if (null != wlock) {
             wlock.release();
             wlock = null;
@@ -305,6 +342,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         am.abandonAudioFocus(this);
         am.unregisterMediaButtonEventReceiver(new ComponentName(getPackageName(),M3uNoisyReceiver.class.getName()));
         stopForeground(true);
+        stopSelf();
         return START_NOT_STICKY;
     }
 
@@ -345,6 +383,12 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
             if ( (lines[i].length() == 0) || lines[i].substring(0,1).equals("#") ) {
                 continue;
             } else {
+            	// make sure it's at least a valid URL...
+            	try {
+            		new URL(lines[i]);
+            	} catch (MalformedURLException ex) {
+            		continue;
+            	}
                 m3uTracks.add(lines[i]);
             }
         }

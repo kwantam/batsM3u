@@ -31,13 +31,13 @@ public class M3uNoisyReceiver extends BroadcastReceiver {
             if (null == event || !isRunning(context) || event.getAction() != KeyEvent.ACTION_DOWN)
                 return;
             switch (event.getKeyCode()) {
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+            case KeyEvent.KEYCODE_HEADSETHOOK:
             case KeyEvent.KEYCODE_MEDIA_PLAY:
                 in.putExtra(M3uPlay.PLAY, true);
                 break;
 
             case KeyEvent.KEYCODE_MEDIA_PAUSE:
-            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
-            case KeyEvent.KEYCODE_HEADSETHOOK:
                 in.putExtra(M3uPlay.PAUSE, true);
                 break;
                 
