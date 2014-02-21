@@ -30,6 +30,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     private boolean lockTrack = false;
     private int trackNum = 0;
 
+    static boolean isRunning = false;
     private MediaPlayer mPlayer = null;
     private WifiLock wlock = null;
     
@@ -53,6 +54,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     private PendingIntent pPlayIntent = null;
     private PendingIntent pPauseIntent = null;
     private PendingIntent pStopIntent = null;
+    private AudioManager am = null;
 
     @Override
     public void onCreate() {
@@ -77,6 +79,8 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         stopIntent = new Intent(getApplicationContext(), M3uPlay.class);
         stopIntent.putExtra(M3uPlay.STOP, true);
         pStopIntent = PendingIntent.getService(getApplicationContext(), 4, stopIntent, PendingIntent.FLAG_CANCEL_CURRENT);
+        
+        am = ((AudioManager) getSystemService(Context.AUDIO_SERVICE));
     }
 
    @Override
@@ -96,8 +100,11 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         .setAutoCancel(true)
         .setContentTitle("Bats! M3u")
         .addAction(android.R.drawable.ic_media_previous, "prev", pPrevIntent);
-
+        
         if (null == mPlayer) {
+        	if (isRunning)	// shouldn't ever have another instance going! something wrong here...
+        		stopSelf();
+        	isRunning = true;
             //doLog("allocating new media player");
             mPlayer = new MediaPlayer();
             mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);            
@@ -114,13 +121,11 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
             }
             
             // get audio focus
-            final AudioManager am = ((AudioManager) getSystemService(Context.AUDIO_SERVICE));
             final int focusReq = am.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
             if (focusReq != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                 // DENIED ; clean up and go away I guess
                 return stopPlayer();
             }
-            am.registerMediaButtonEventReceiver(new ComponentName(getPackageName(),M3uNoisyReceiver.class.getName()));
         }
 
         if (intent != null) {
@@ -182,6 +187,8 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         	return START_NOT_STICKY;
         }
 
+        // what if we register again every time through? does that keep us from losing focus?
+        am.registerMediaButtonEventReceiver(new ComponentName(getPackageName(),M3uNoisyReceiver.class.getCanonicalName()));
         final String url = m3uTracks.get(trackNum);
         final String fileName;
         if (url.indexOf('/') != -1)
@@ -331,6 +338,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
 
     private int stopPlayer() {
         //doLog("stopping media player");
+    	isRunning = false;
         mPlayer.release();
         mPlayer = null;
         m3uTracks = null;
@@ -338,7 +346,6 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
             wlock.release();
             wlock = null;
         }
-        final AudioManager am = ((AudioManager) getSystemService(Context.AUDIO_SERVICE));
         am.abandonAudioFocus(this);
         am.unregisterMediaButtonEventReceiver(new ComponentName(getPackageName(),M3uNoisyReceiver.class.getName()));
         stopForeground(true);
@@ -398,12 +405,9 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
 
     List<String> getM3u(Uri uri) throws IOException {
         //final URL url = new URL(uri.toString());
-        final List<String> m3uTracks;
         //final HttpURLConnection con = (HttpURLConnection) url.openConnection();
         final InputStream in = getApplicationContext().getContentResolver().openInputStream(uri);
 
-        m3uTracks = parseM3u(istrm2String(in));
-
-        return m3uTracks;
+        return parseM3u(istrm2String(in));
     }
- }
+}

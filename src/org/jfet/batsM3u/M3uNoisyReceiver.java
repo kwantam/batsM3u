@@ -1,7 +1,5 @@
 package org.jfet.batsM3u;
 
-import android.app.ActivityManager;
-import android.app.ActivityManager.RunningServiceInfo;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -18,7 +16,7 @@ public class M3uNoisyReceiver extends BroadcastReceiver {
 
         if (intent.getAction().equals(AudioManager.ACTION_AUDIO_BECOMING_NOISY)) {
             //Log.v(logTag,"got noisy warning");
-            if (isRunning(context)) {
+            if (M3uPlay.isRunning) {
                 in.putExtra(M3uPlay.PAUSE, true);
                 context.startService(in);
             //} else {
@@ -28,7 +26,7 @@ public class M3uNoisyReceiver extends BroadcastReceiver {
             final KeyEvent event = (KeyEvent) intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
             
             // if somehow we didn't get an event or if the service is not running (neither of these should happen!) do nothing
-            if (null == event || !isRunning(context) || event.getAction() != KeyEvent.ACTION_DOWN)
+            if (null == event || !M3uPlay.isRunning || event.getAction() != KeyEvent.ACTION_DOWN)
                 return;
             switch (event.getKeyCode()) {
             case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
@@ -60,14 +58,5 @@ public class M3uNoisyReceiver extends BroadcastReceiver {
             // send the appropriate message to the service
             context.startService(in);
         }
-    }
-    
-    private boolean isRunning(Context context) {
-        final ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-        for (RunningServiceInfo rsi : am.getRunningServices(Integer.MAX_VALUE)) {
-            if (M3uPlay.class.getName().equals(rsi.service.getClassName()))
-                    return true;
-        }
-        return false;
     }
 }

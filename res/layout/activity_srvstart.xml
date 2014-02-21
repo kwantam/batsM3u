@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/main_layout" >
+    
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="3"
+        android:layout_gravity="center_vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal" >
+
+        <ImageButton android:layout_width="0dp"
+            android:id="@+id/prevButton"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:onClick="handleButton"
+            android:contentDescription="prev"
+            android:src="@android:drawable/ic_media_previous" />
+        
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="vertical" >
+
+            <ImageButton android:layout_width="match_parent"
+                android:id="@+id/playButton"
+                android:layout_height="wrap_content"
+                android:onClick="handleButton"
+                android:contentDescription="play"
+                android:src="@android:drawable/ic_media_play" />
+            <ImageButton android:layout_width="match_parent"
+                android:id="@+id/pauseButton"
+                android:layout_height="wrap_content"
+                android:onClick="handleButton"
+                android:contentDescription="pause"
+                android:src="@android:drawable/ic_media_pause" />
+        </LinearLayout>
+        
+        <ImageButton android:layout_width="0dp"
+            android:id="@+id/nextButton"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:onClick="handleButton"
+            android:contentDescription="next"
+            android:src="@android:drawable/ic_media_next" />
+        
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="2"
+        android:gravity="center_vertical"
+        android:orientation="horizontal" >
+        <View style="@style/SpacerW1" />
+        <ImageButton android:layout_width="0dp"
+            android:id="@+id/stopButton"
+            android:layout_weight="2"
+            android:layout_height="wrap_content"
+            android:onClick="handleButton"
+            android:contentDescription="stop"
+            android:src="@android:drawable/ic_menu_close_clear_cancel" />
+        <View style="@style/SpacerW1" />
+         
+    </LinearLayout>
+    
+</LinearLayout>
