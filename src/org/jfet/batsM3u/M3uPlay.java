@@ -1,10 +1,11 @@
 package org.jfet.batsM3u;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +21,7 @@ import android.net.wifi.WifiManager.WifiLock;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.support.v4.app.NotificationCompat;
+import android.webkit.URLUtil;
 import android.media.MediaPlayer;
 import android.media.AudioManager;
 //import android.util.Log;
@@ -132,7 +134,8 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
             if (intent.getBooleanExtra(M3uPlay.START, false) && null != intent.getData()) {
                 try {
                     //doLog("getting M3u");
-                    m3uTracks = getM3u(intent.getData());
+                    final Uri theUri = intent.getData();
+                    m3uTracks = parseM3u(istrm2String(getApplicationContext().getContentResolver().openInputStream(theUri)),theUri.toString());
                 } catch (IOException ex) {
                     //doLog("failed to get M3u");
                     return stopPlayer();
@@ -277,7 +280,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     public boolean onError(MediaPlayer p, int what, int extra) {
         //doLog("media player error: " + what + " " + extra);
 
-    	if ( (1 == what) && (-1004 == extra) ) {
+    	if ( (1 == what) && ((-1004 == extra) || (-2147483648 == extra)) ) {
     		mPlayer.reset();
     		lockTrack = false;
     		isPaused = false;
@@ -382,32 +385,34 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     }
 
     // parse an m3u file
-    static List<String> parseM3u(String m3uFile) {
+    static List<String> parseM3u(String m3uContents, String m3uUri) {
         final List<String> m3uTracks = new ArrayList<String>();
-        final String[] lines = m3uFile.split("\r\n|\r|\n");
+        final String[] lines = m3uContents.split("\r\n|\r|\n");
+        final String m3uFile;
+        if (URLUtil.isFileUrl(m3uUri) && (-1 != m3uUri.lastIndexOf('/')))
+            m3uFile = m3uUri.substring(0,m3uUri.lastIndexOf('/')+1);
+        else
+            m3uFile = null;
 
         for (int i=0; i<lines.length; i++) {
-            if ( (lines[i].length() == 0) || lines[i].substring(0,1).equals("#") ) {
+            if ( (lines[i].length() == 0) || lines[i].substring(0,1).equals("#"))   // ignore comments and such
                 continue;
-            } else {
-            	// make sure it's at least a valid URL...
-            	try {
-            		new URL(lines[i]);
-            	} catch (MalformedURLException ex) {
-            		continue;
-            	}
+            else if (URLUtil.isNetworkUrl(lines[i]) || URLUtil.isContentUrl(lines[i]) || URLUtil.isFileUrl(lines[i])) // valid URL?
                 m3uTracks.add(lines[i]);
+            else if (null != m3uFile) {
+                // hey, it *could* be a relative path; let's find out
+                final String absStr = m3uFile + lines[i];
+                try {
+                if ((new File(new URI(absStr))).exists())
+                    m3uTracks.add(absStr);
+                } catch (URISyntaxException ex) {
+                    continue;
+                } catch (IllegalArgumentException ex) {
+                    continue;
+                }
             }
         }
 
         return m3uTracks;
-    }
-
-    List<String> getM3u(Uri uri) throws IOException {
-        //final URL url = new URL(uri.toString());
-        //final HttpURLConnection con = (HttpURLConnection) url.openConnection();
-        final InputStream in = getApplicationContext().getContentResolver().openInputStream(uri);
-
-        return parseM3u(istrm2String(in));
     }
 }
