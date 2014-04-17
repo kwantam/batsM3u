@@ -145,7 +145,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
                 trackNum = 0;
                 isPaused = false;
                 lockTrack = false;
-            } else if (null != m3uTracks) {
+            } else if ( (null != m3uTracks) && (0 < m3uTracks.size()) ) {
                 if (intent.getBooleanExtra(M3uPlay.STOP, false)) {
                     //doLog("asked to stop");
                     return stopPlayer();
