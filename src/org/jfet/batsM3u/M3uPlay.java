@@ -145,7 +145,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
                 trackNum = 0;
                 isPaused = false;
                 lockTrack = false;
-            } else if ( (null != m3uTracks) && (0 < m3uTracks.size()) ) {
+            } else if (null != m3uTracks) {
                 if (intent.getBooleanExtra(M3uPlay.STOP, false)) {
                     //doLog("asked to stop");
                     return stopPlayer();
@@ -180,7 +180,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
                 }
             } else {
                 //doLog("m3uTracks null, unknown intent");
-                return START_NOT_STICKY;
+                return stopPlayer();
             }
         } else {
         	// if we get a null intent, do nothing and also indicate
@@ -188,6 +188,10 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         	// (this happens presumably only when we're not playing,
         	// so we don't need to remain sticky.)
         	return START_NOT_STICKY;
+        }
+        
+        if ( (null == m3uTracks) || (0 == m3uTracks.size()) ) {
+        	return stopPlayer();
         }
 
         // what if we register again every time through? does that keep us from losing focus?
