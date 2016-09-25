@@ -11,13 +11,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import android.annotation.TargetApi;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
@@ -121,7 +121,8 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
             mPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
 
             // if we're playing over WiFi, get a WiFi lock
-            if (((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo().getType() == ConnectivityManager.TYPE_WIFI) {
+            final NetworkInfo my_network_info = ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
+            if (my_network_info != null && my_network_info.getType() == ConnectivityManager.TYPE_WIFI) {
                 wlock = ((WifiManager) getSystemService(Context.WIFI_SERVICE)).createWifiLock(WifiManager.WIFI_MODE_FULL, "batsM3u");
                 wlock.setReferenceCounted(false);   // no need for ref counting here, just hold or don't
                 wlock.acquire();
@@ -308,7 +309,12 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     		isPaused = false;
     		// probably just a 404; remove the offending file
     		//doLog("not found: " + m3uTracks.get(trackNum));
-    		m3uTracks.remove(trackNum--);
+            if (trackNum >= 0 && trackNum < m3uTracks.size()) {
+                m3uTracks.remove(trackNum--);
+            } else {
+                // invalid track number; when NEXT executes, this will reset to track #0
+                trackNum = -1;
+            }
     		
     		// we decremented above, so sending NEXT
     		// will cause the player to do the right thing
