@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.jfet.batsM3u"
-    android:versionCode="7"
-    android:versionName="1.468693" >
+    android:versionCode="8"
+    android:versionName="1.4686939" >
     <!-- versionName is an increasing substring of e*cos(1) -->
     <!-- 1.4686939399158851571389675973266042613269567366290087 -->
 
