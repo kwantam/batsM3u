@@ -7,8 +7,11 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import android.annotation.TargetApi;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ComponentName;
@@ -18,12 +21,14 @@ import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.support.v4.app.NotificationCompat;
 import android.webkit.URLUtil;
 import android.media.MediaPlayer;
 import android.media.AudioManager;
+import android.util.Base64;
 //import android.util.Log;
 
 public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener, MediaPlayer.OnCompletionListener, AudioManager.OnAudioFocusChangeListener {
@@ -35,7 +40,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     static boolean isRunning = false;
     private MediaPlayer mPlayer = null;
     private WifiLock wlock = null;
-    
+
     static final String START = "org.jfet.batsM3u.START";
     static final String NEXT = "org.jfet.batsM3u.NEXT";
     static final String PREV = "org.jfet.batsM3u.PREV";
@@ -45,7 +50,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
     private static final int bufSize = 4096;
 
     //static final String logTag = "org.jfet.batsM3u.M3uPlay";
-    
+
     private Intent nextIntent = null;
     private Intent prevIntent = null;
     private Intent playIntent = null;
@@ -81,7 +86,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         stopIntent = new Intent(getApplicationContext(), M3uPlay.class);
         stopIntent.putExtra(M3uPlay.STOP, true);
         pStopIntent = PendingIntent.getService(getApplicationContext(), 4, stopIntent, PendingIntent.FLAG_CANCEL_CURRENT);
-        
+
         am = ((AudioManager) getSystemService(Context.AUDIO_SERVICE));
     }
 
@@ -102,26 +107,26 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         .setAutoCancel(true)
         .setContentTitle("Bats! M3u")
         .addAction(android.R.drawable.ic_media_previous, "prev", pPrevIntent);
-        
+
         if (null == mPlayer) {
         	if (isRunning)	// shouldn't ever have another instance going! something wrong here...
         		stopSelf();
         	isRunning = true;
             //doLog("allocating new media player");
             mPlayer = new MediaPlayer();
-            mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);            
+            mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
             mPlayer.setOnPreparedListener(this);
             mPlayer.setOnErrorListener(this);
             mPlayer.setOnCompletionListener(this);
             mPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
-            
+
             // if we're playing over WiFi, get a WiFi lock
             if (((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo().getType() == ConnectivityManager.TYPE_WIFI) {
                 wlock = ((WifiManager) getSystemService(Context.WIFI_SERVICE)).createWifiLock(WifiManager.WIFI_MODE_FULL, "batsM3u");
                 wlock.setReferenceCounted(false);   // no need for ref counting here, just hold or don't
                 wlock.acquire();
             }
-            
+
             // get audio focus
             final int focusReq = am.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
             if (focusReq != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
@@ -189,7 +194,7 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         	// so we don't need to remain sticky.)
         	return START_NOT_STICKY;
         }
-        
+
         if ( (null == m3uTracks) || (0 == m3uTracks.size()) ) {
         	return stopPlayer();
         }
@@ -198,10 +203,11 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
         am.registerMediaButtonEventReceiver(new ComponentName(getPackageName(),M3uNoisyReceiver.class.getCanonicalName()));
         final String url = m3uTracks.get(trackNum);
         final String fileName;
-        if (url.indexOf('/') != -1)
-            fileName = Uri.decode(url.substring(url.lastIndexOf('/')+1));
-        else
+        if (url.indexOf('/') != -1) {
+            fileName = Uri.decode(url.substring(url.lastIndexOf('/') + 1));
+        } else {
             fileName = Uri.decode(url);
+        }
 
         if (isPaused) {
             nb.setTicker("Paused")
@@ -223,9 +229,21 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
                 mPlayer.start();
             } else {
                 try {
-                    //doLog("prepping media player");
                     mPlayer.reset();
-                    mPlayer.setDataSource(url);
+                    final Uri thisUri = Uri.parse(url);
+                    final String userInfo = thisUri.getUserInfo();
+
+                    // handle username/password in URL
+                    //doLog("prepping media player");
+                    if (null != userInfo && Build.VERSION.SDK_INT >= 14) {
+                        // add headers --- only available in ICS or newer
+                        final Map<String, String> extra_headers = new HashMap<String, String>();
+                        extra_headers.put("Authorization", "Basic " + Base64.encodeToString(userInfo.getBytes(), Base64.DEFAULT));
+                        mPlayer.setDataSource(getApplicationContext(), thisUri, extra_headers);
+                    } else {
+                        mPlayer.setDataSource(getApplicationContext(), thisUri);
+                    }
+
                     // indicate (for fast-forward, rewind, play, pause) that we are preparing
                     lockTrack = true;
                     mPlayer.prepareAsync();
@@ -242,13 +260,13 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
 
         return START_NOT_STICKY;
     }
-    
+
 /*
     private void doLog(String msg) {
         Log.v(logTag, msg);
     }
 */
-    
+
     @Override
     public void onDestroy() {
         //doLog("destroying");
@@ -324,17 +342,17 @@ public class M3uPlay extends Service implements MediaPlayer.OnPreparedListener, 
                     startService(playIntent);
             }
             break;
-        
+
         case AudioManager.AUDIOFOCUS_LOSS:
             // long-term loss, we just give up and die
             stopPlayer();
             break;
-            
+
         case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
             // pause music transiently
             startService(pauseIntent);
             break;
-            
+
         case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
             // don't have to pause, just lower volume a bit
             if ( (null != mPlayer) && (mPlayer.isPlaying()) )
